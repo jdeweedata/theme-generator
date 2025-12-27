@@ -122,27 +122,128 @@ async function callOpenAI(
 }
 
 // ============================================================================
-// Google Gemini API Integration (Placeholder for visual generation)
+// Google Imagen 3 API Integration
 // ============================================================================
 
-async function callGemini(
-  _prompt: string,
-  apiKey: string
-): Promise<string> {
-  // Placeholder for Gemini integration
-  // When fully implemented, this will call Google's Gemini API for image generation
+interface ImagenConfig {
+  numberOfImages?: number // 1-4
+  aspectRatio?: "1:1" | "3:4" | "4:3" | "9:16" | "16:9"
+  personGeneration?: "DONT_ALLOW" | "ALLOW_ADULT" | "ALLOW_ALL"
+}
 
+interface ImagenResponse {
+  predictions?: {
+    bytesBase64Encoded: string
+    mimeType: string
+  }[]
+  error?: {
+    code: number
+    message: string
+    status: string
+  }
+}
+
+async function callImagen(
+  prompt: string,
+  apiKey: string,
+  config: ImagenConfig = {}
+): Promise<{ images: string[]; mimeType: string }> {
   if (!apiKey) {
-    throw new Error("Google Gemini API key required for visual generation")
+    throw new Error("Google API key required for Imagen image generation")
   }
 
-  // For now, return a placeholder response
-  // TODO: Implement actual Gemini/Imagen API calls
-  console.log("Gemini integration placeholder - visual generation coming soon")
-  return JSON.stringify({
-    status: "placeholder",
-    message: "Gemini visual generation will be available in a future update",
+  const {
+    numberOfImages = 1,
+    aspectRatio = "1:1",
+    personGeneration = "DONT_ALLOW",
+  } = config
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        instances: [{ prompt }],
+        parameters: {
+          sampleCount: numberOfImages,
+          aspectRatio,
+          personGeneration,
+        },
+      }),
+    }
+  )
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    const errorMessage =
+      error.error?.message || `Imagen API error: ${response.status}`
+
+    if (response.status === 401 || response.status === 403) {
+      throw new Error(
+        "Your Google API key failed. Please check your API key or remove it to use our default system."
+      )
+    }
+    if (response.status === 429) {
+      throw new Error(
+        "Your Google API key hit rate limits. Please try again later or check your quota."
+      )
+    }
+    throw new Error(errorMessage)
+  }
+
+  const data: ImagenResponse = await response.json()
+
+  if (data.error) {
+    throw new Error(data.error.message || "Imagen generation failed")
+  }
+
+  if (!data.predictions || data.predictions.length === 0) {
+    throw new Error("No images generated from Imagen API")
+  }
+
+  return {
+    images: data.predictions.map((p) => p.bytesBase64Encoded),
+    mimeType: data.predictions[0]?.mimeType || "image/png",
+  }
+}
+
+// Generate logo using Imagen 3
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function generateLogoWithImagen(
+  prompt: string,
+  apiKey: string
+): Promise<{ imageBase64: string; mimeType: string }> {
+  const result = await callImagen(prompt, apiKey, {
+    numberOfImages: 1,
+    aspectRatio: "1:1",
+    personGeneration: "DONT_ALLOW",
   })
+
+  return {
+    imageBase64: result.images[0],
+    mimeType: result.mimeType,
+  }
+}
+
+// Generate hero image using Imagen 3
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function generateHeroWithImagen(
+  prompt: string,
+  apiKey: string
+): Promise<{ imageBase64: string; mimeType: string }> {
+  const result = await callImagen(prompt, apiKey, {
+    numberOfImages: 1,
+    aspectRatio: "16:9",
+    personGeneration: "ALLOW_ADULT",
+  })
+
+  return {
+    imageBase64: result.images[0],
+    mimeType: result.mimeType,
+  }
 }
 
 // ============================================================================
@@ -177,15 +278,101 @@ async function callStrategyEngine(
 }
 
 // ============================================================================
-// Visual Engine Wrapper (for future image generation)
+// DALL-E 3 API Integration
 // ============================================================================
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function callVisualEngine(
+interface DallEResponse {
+  data?: {
+    url?: string
+    b64_json?: string
+    revised_prompt?: string
+  }[]
+  error?: {
+    message: string
+    type: string
+    code: string
+  }
+}
+
+async function callDallE(
   prompt: string,
-  engineConfig: EngineConfig
-): Promise<string> {
+  apiKey: string,
+  config: { size?: "1024x1024" | "1792x1024" | "1024x1792"; quality?: "standard" | "hd" } = {}
+): Promise<{ imageBase64: string; mimeType: string; revisedPrompt?: string }> {
+  if (!apiKey) {
+    throw new Error("OpenAI API key required for DALL-E 3 image generation")
+  }
+
+  const { size = "1024x1024", quality = "standard" } = config
+
+  const response = await fetch("https://api.openai.com/v1/images/generations", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "dall-e-3",
+      prompt,
+      n: 1,
+      size,
+      quality,
+      response_format: "b64_json",
+    }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    const errorMessage = error.error?.message || `DALL-E API error: ${response.status}`
+
+    if (response.status === 401) {
+      throw new Error(
+        "Your OpenAI API key failed. Please check your API key or remove it to use our default system."
+      )
+    }
+    if (response.status === 429) {
+      throw new Error(
+        "Your OpenAI API key hit rate limits. Please try again later or check your quota."
+      )
+    }
+    throw new Error(errorMessage)
+  }
+
+  const data: DallEResponse = await response.json()
+
+  if (data.error) {
+    throw new Error(data.error.message || "DALL-E generation failed")
+  }
+
+  if (!data.data || data.data.length === 0 || !data.data[0].b64_json) {
+    throw new Error("No images generated from DALL-E API")
+  }
+
+  return {
+    imageBase64: data.data[0].b64_json,
+    mimeType: "image/png",
+    revisedPrompt: data.data[0].revised_prompt,
+  }
+}
+
+// ============================================================================
+// Visual Engine Wrapper
+// ============================================================================
+
+interface GeneratedImage {
+  imageBase64: string
+  mimeType: string
+  revisedPrompt?: string
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function generateImage(
+  prompt: string,
+  engineConfig: EngineConfig,
+  options: { aspectRatio?: "square" | "landscape" | "portrait" } = {}
+): Promise<GeneratedImage> {
   const { visualEngine, userKeys } = engineConfig
+  const { aspectRatio = "square" } = options
 
   if (visualEngine === "gemini-imagen") {
     const apiKey = userKeys.google || process.env.GOOGLE_API_KEY
@@ -194,7 +381,25 @@ async function callVisualEngine(
         "Google API key not configured. Please add your API key in Advanced settings, or configure GOOGLE_API_KEY in environment variables."
       )
     }
-    return callGemini(prompt, apiKey)
+
+    // Map aspect ratio to Imagen format
+    const imagenAspectRatio =
+      aspectRatio === "landscape"
+        ? "16:9"
+        : aspectRatio === "portrait"
+        ? "9:16"
+        : "1:1"
+
+    const result = await callImagen(prompt, apiKey, {
+      numberOfImages: 1,
+      aspectRatio: imagenAspectRatio,
+      personGeneration: "ALLOW_ADULT",
+    })
+
+    return {
+      imageBase64: result.images[0],
+      mimeType: result.mimeType,
+    }
   } else {
     // DALL-E 3 via OpenAI
     const apiKey = userKeys.openai || process.env.OPENAI_API_KEY
@@ -203,9 +408,16 @@ async function callVisualEngine(
         "OpenAI API key not configured for DALL-E 3. Please add your API key in Advanced settings."
       )
     }
-    // Placeholder - would call OpenAI's image generation endpoint
-    console.log("DALL-E 3 integration placeholder")
-    return JSON.stringify({ status: "placeholder" })
+
+    // Map aspect ratio to DALL-E format
+    const dalleSize =
+      aspectRatio === "landscape"
+        ? "1792x1024"
+        : aspectRatio === "portrait"
+        ? "1024x1792"
+        : "1024x1024"
+
+    return callDallE(prompt, apiKey, { size: dalleSize as "1024x1024" | "1792x1024" | "1024x1792" })
   }
 }
 

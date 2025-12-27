@@ -26,7 +26,11 @@
       "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd theme generator with shadcn/ui components\n\nFeatures:\n- 37 theme presets \\(Amber Minimal, Ocean Blue, Forest Green, etc.\\)\n- HSL color picker with real-time preview\n- Typography panel with Google Fonts integration\n- Code export dialog with CSS variables output\n- Contrast checker with WCAG 2.0 AA compliance\n- Dark/light mode toggle\n- Live component preview \\(cards, dashboard, forms\\)\n\nComponents:\n- Theme generator with color panel, toolbar, header\n- shadcn/ui components \\(Button, Card, Dialog, etc.\\)\n- Contrast checker dialog with pass/fail indicators\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(gh repo create:*)",
       "Bash(npx vercel:*)",
-      "Bash(git commit -m \"$\\(cat <<''EOF''\nFix ESLint errors for production build\n\n- Configure ESLint to ignore unused vars prefixed with underscore\n- Remove unused lucide-react imports \\(Bell, ChevronLeft, ChevronRight\\)\n- Escape quotes in typography preview text\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nFix ESLint errors for production build\n\n- Configure ESLint to ignore unused vars prefixed with underscore\n- Remove unused lucide-react imports \\(Bell, ChevronLeft, ChevronRight\\)\n- Escape quotes in typography preview text\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(git restore:*)",
+      "WebFetch(domain:ai.google.dev)"
     ]
   }
 }
