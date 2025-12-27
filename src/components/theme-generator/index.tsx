@@ -8,7 +8,10 @@ import { TypographyPanel } from "./typography-panel"
 import { PreviewPanel } from "./preview-panel"
 import { CodeDialog } from "./code-dialog"
 import { ContrastCheckerDialog } from "./contrast-checker-dialog"
+import { BrandWizardPanel } from "./brand-wizard-panel"
+import { BrandConceptDialog } from "./brand-concept-dialog"
 import { themePresets, ThemePreset, ThemeColorSet, TypographySettings, defaultTypography } from "@/lib/theme-presets"
+import { BrandConcept, GenerationSection } from "@/lib/brand-concept-types"
 
 export interface ThemeState {
   preset: ThemePreset
@@ -24,6 +27,10 @@ export function ThemeGenerator() {
   const [isDarkMode, setIsDarkMode] = React.useState(false)
   const [showCodeDialog, setShowCodeDialog] = React.useState(false)
   const [showContrastChecker, setShowContrastChecker] = React.useState(false)
+  const [showBrandDialog, setShowBrandDialog] = React.useState(false)
+  const [brandConcept, setBrandConcept] = React.useState<BrandConcept | null>(null)
+  const [brandError, setBrandError] = React.useState<string | null>(null)
+  const [brandApiKey, setBrandApiKey] = React.useState<string>("")
   const [activeTab, setActiveTab] = React.useState<"colors" | "typography" | "other" | "generate">("colors")
   const [previewTab, setPreviewTab] = React.useState<string>("cards")
   const [isLoaded, setIsLoaded] = React.useState(false)
@@ -177,6 +184,56 @@ export function ThemeGenerator() {
     }
   }
 
+  // Handle brand concept generation complete
+  const handleBrandComplete = (concept: BrandConcept, apiKey?: string) => {
+    setBrandConcept(concept)
+    setBrandError(null)
+    setBrandApiKey(apiKey || "")
+    setShowBrandDialog(true)
+  }
+
+  // Handle brand concept error
+  const handleBrandError = (error: string) => {
+    setBrandError(error)
+  }
+
+  // Handle applying brand theme
+  const handleApplyBrandTheme = (preset: ThemePreset) => {
+    selectPreset(preset)
+  }
+
+  // Handle regenerating a section
+  const handleRegenerateSection = async (section: GenerationSection) => {
+    if (!brandConcept) return
+
+    try {
+      const response = await fetch("/api/brand-concept", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          // Pass custom API key if available
+          ...(brandApiKey && { "X-OpenAI-Key": brandApiKey }),
+        },
+        body: JSON.stringify({
+          brief: brandConcept.brief,
+          section,
+          existingConcept: brandConcept,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to regenerate section")
+      }
+
+      setBrandConcept(data.concept)
+    } catch (error) {
+      console.error("Regeneration failed:", error)
+      throw error
+    }
+  }
+
   if (!isLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -249,8 +306,26 @@ export function ThemeGenerator() {
               </div>
             )}
             {activeTab === "generate" && (
-              <div className="p-4 text-muted-foreground text-sm">
-                AI theme generation coming soon...
+              <div className="h-full flex flex-col">
+                {brandError && (
+                  <div className="m-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+                    {brandError}
+                  </div>
+                )}
+                <BrandWizardPanel
+                  onComplete={handleBrandComplete}
+                  onError={handleBrandError}
+                />
+                {brandConcept && (
+                  <div className="p-4 border-t">
+                    <button
+                      onClick={() => setShowBrandDialog(true)}
+                      className="w-full px-4 py-2 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90"
+                    >
+                      View Generated Concept
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -281,6 +356,15 @@ export function ThemeGenerator() {
         colors={currentColors}
         isDarkMode={isDarkMode}
         onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
+      />
+
+      {/* Brand Concept Dialog */}
+      <BrandConceptDialog
+        open={showBrandDialog}
+        onOpenChange={setShowBrandDialog}
+        concept={brandConcept}
+        onApplyTheme={handleApplyBrandTheme}
+        onRegenerate={handleRegenerateSection}
       />
     </div>
   )
