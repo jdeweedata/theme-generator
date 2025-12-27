@@ -25,6 +25,41 @@ export const brandPersonalityOptions = [
 
 export type BrandPersonality = typeof brandPersonalityOptions[number]
 
+// ============================================================================
+// AI Engine Configuration Types
+// ============================================================================
+
+export const strategyEngineOptions = [
+  { value: "claude-opus", label: "Claude Opus 4.5 (Recommended)" },
+  { value: "gpt-4o", label: "GPT-4o" },
+] as const
+
+export const visualEngineOptions = [
+  { value: "gemini-imagen", label: "Gemini 3 Pro + Imagen 4 (Recommended)" },
+  { value: "dall-e-3", label: "DALL-E 3" },
+] as const
+
+export type StrategyEngine = typeof strategyEngineOptions[number]["value"]
+export type VisualEngine = typeof visualEngineOptions[number]["value"]
+
+export interface UserApiKeys {
+  anthropic?: string
+  openai?: string
+  google?: string
+}
+
+export interface EngineConfig {
+  strategyEngine: StrategyEngine
+  visualEngine: VisualEngine
+  userKeys: UserApiKeys
+}
+
+export const defaultEngineConfig: EngineConfig = {
+  strategyEngine: "claude-opus",
+  visualEngine: "gemini-imagen",
+  userKeys: {},
+}
+
 export const brandBriefSchema = z.object({
   businessDescription: z
     .string()

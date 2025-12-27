@@ -10,12 +10,25 @@ import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   BrandBriefInput,
   BrandConcept,
   WizardStep,
   GenerationSection,
   brandPersonalityOptions,
   defaultBrandBrief,
+  EngineConfig,
+  StrategyEngine,
+  VisualEngine,
+  strategyEngineOptions,
+  visualEngineOptions,
+  defaultEngineConfig,
 } from "@/lib/brand-concept-types"
 import {
   Sparkles,
@@ -27,11 +40,13 @@ import {
   Pencil,
   ChevronDown,
   ChevronRight,
-  Key,
+  Settings2,
+  Brain,
+  ImageIcon,
 } from "lucide-react"
 
 interface BrandWizardPanelProps {
-  onComplete: (concept: BrandConcept, apiKey?: string) => void
+  onComplete: (concept: BrandConcept, engineConfig?: EngineConfig) => void
   onError: (error: string) => void
 }
 
@@ -42,7 +57,7 @@ export function BrandWizardPanel({ onComplete, onError }: BrandWizardPanelProps)
   const [currentSection, setCurrentSection] = React.useState<string>("")
   const [errors, setErrors] = React.useState<string[]>([])
   const [showAdvanced, setShowAdvanced] = React.useState(false)
-  const [customApiKey, setCustomApiKey] = React.useState("")
+  const [engineConfig, setEngineConfig] = React.useState<EngineConfig>(defaultEngineConfig)
 
   // Refs for interval cleanup on unmount
   const progressIntervalRef = React.useRef<NodeJS.Timeout | null>(null)
@@ -126,12 +141,11 @@ export function BrandWizardPanel({ onComplete, onError }: BrandWizardPanelProps)
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          // Pass custom API key in header if provided
-          ...(customApiKey.trim() && { "X-OpenAI-Key": customApiKey.trim() }),
         },
         body: JSON.stringify({
           brief,
           sections,
+          engineConfig,
         }),
       })
 
@@ -147,7 +161,7 @@ export function BrandWizardPanel({ onComplete, onError }: BrandWizardPanelProps)
       setProgress(100)
       setCurrentSection("Complete!")
       setStep("complete")
-      onComplete(data.concept, customApiKey.trim() || undefined)
+      onComplete(data.concept, engineConfig)
     } catch (error) {
       clearIntervals()
       setStep("review")
@@ -318,16 +332,16 @@ export function BrandWizardPanel({ onComplete, onError }: BrandWizardPanelProps)
         />
       </div>
 
-      {/* Advanced Toggle */}
-      <div className="border rounded-lg">
+      {/* Advanced Settings Toggle */}
+      <div className="border rounded-lg overflow-hidden">
         <button
           type="button"
           onClick={() => setShowAdvanced(!showAdvanced)}
-          className="w-full flex items-center justify-between p-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          className="w-full flex items-center justify-between p-3 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
         >
           <span className="flex items-center gap-2">
-            <Key className="h-4 w-4" />
-            Advanced
+            <Settings2 className="h-4 w-4" />
+            Advanced Settings: Bring Your Own Keys (BYOK)
           </span>
           {showAdvanced ? (
             <ChevronDown className="h-4 w-4" />
@@ -336,21 +350,114 @@ export function BrandWizardPanel({ onComplete, onError }: BrandWizardPanelProps)
           )}
         </button>
         {showAdvanced && (
-          <div className="px-3 pb-3 space-y-2">
-            <Label htmlFor="customApiKey" className="text-xs">
-              OpenAI API Key (Optional)
-            </Label>
-            <Input
-              id="customApiKey"
-              type="password"
-              placeholder="sk-..."
-              value={customApiKey}
-              onChange={(e) => setCustomApiKey(e.target.value)}
-              className="font-mono text-xs"
-            />
-            <p className="text-xs text-muted-foreground">
-              Use your own OpenAI API key to hit your own account. Leave empty to use the default.
-            </p>
+          <div className="px-3 pb-4 space-y-5 border-t bg-muted/30">
+            {/* Strategy Engine Section */}
+            <div className="pt-4 space-y-3">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Brain className="h-4 w-4 text-primary" />
+                Strategy Engine (Claude / OpenAI)
+              </div>
+              <Select
+                value={engineConfig.strategyEngine}
+                onValueChange={(value: StrategyEngine) =>
+                  setEngineConfig((prev) => ({ ...prev, strategyEngine: value }))
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {strategyEngineOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="space-y-1.5">
+                <Label htmlFor="anthropicKey" className="text-xs text-muted-foreground">
+                  {engineConfig.strategyEngine === "claude-opus" ? "Anthropic" : "OpenAI"} API Key
+                </Label>
+                <Input
+                  id="anthropicKey"
+                  type="password"
+                  placeholder={engineConfig.strategyEngine === "claude-opus" ? "sk-ant-..." : "sk-..."}
+                  value={engineConfig.strategyEngine === "claude-opus"
+                    ? engineConfig.userKeys.anthropic || ""
+                    : engineConfig.userKeys.openai || ""}
+                  onChange={(e) =>
+                    setEngineConfig((prev) => ({
+                      ...prev,
+                      userKeys: {
+                        ...prev.userKeys,
+                        [engineConfig.strategyEngine === "claude-opus" ? "anthropic" : "openai"]: e.target.value,
+                      },
+                    }))
+                  }
+                  className="font-mono text-xs"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Optional: Leave blank to use app default.
+                </p>
+              </div>
+              <p className="text-xs text-muted-foreground italic border-l-2 border-primary/30 pl-2">
+                Used for strategy docs, SVG logos, and design tokens.
+              </p>
+            </div>
+
+            {/* Visual Engine Section */}
+            <div className="space-y-3 pt-3 border-t">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <ImageIcon className="h-4 w-4 text-primary" />
+                Visual Engine (Gemini / Imagen)
+              </div>
+              <Select
+                value={engineConfig.visualEngine}
+                onValueChange={(value: VisualEngine) =>
+                  setEngineConfig((prev) => ({ ...prev, visualEngine: value }))
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {visualEngineOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="space-y-1.5">
+                <Label htmlFor="visualKey" className="text-xs text-muted-foreground">
+                  {engineConfig.visualEngine === "gemini-imagen" ? "Google Gemini" : "OpenAI"} API Key
+                </Label>
+                <Input
+                  id="visualKey"
+                  type="password"
+                  placeholder={engineConfig.visualEngine === "gemini-imagen" ? "AIza..." : "sk-..."}
+                  value={engineConfig.visualEngine === "gemini-imagen"
+                    ? engineConfig.userKeys.google || ""
+                    : engineConfig.userKeys.openai || ""}
+                  onChange={(e) =>
+                    setEngineConfig((prev) => ({
+                      ...prev,
+                      userKeys: {
+                        ...prev.userKeys,
+                        [engineConfig.visualEngine === "gemini-imagen" ? "google" : "openai"]: e.target.value,
+                      },
+                    }))
+                  }
+                  className="font-mono text-xs"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Optional: Leave blank to use app default.
+                </p>
+              </div>
+              <p className="text-xs text-muted-foreground italic border-l-2 border-primary/30 pl-2">
+                Used for photorealistic mockups and lifestyle imagery.
+              </p>
+            </div>
           </div>
         )}
       </div>

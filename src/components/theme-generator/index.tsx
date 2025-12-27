@@ -11,7 +11,7 @@ import { ContrastCheckerDialog } from "./contrast-checker-dialog"
 import { BrandWizardPanel } from "./brand-wizard-panel"
 import { BrandConceptDialog } from "./brand-concept-dialog"
 import { themePresets, ThemePreset, ThemeColorSet, TypographySettings, defaultTypography } from "@/lib/theme-presets"
-import { BrandConcept, GenerationSection } from "@/lib/brand-concept-types"
+import { BrandConcept, GenerationSection, EngineConfig } from "@/lib/brand-concept-types"
 
 export interface ThemeState {
   preset: ThemePreset
@@ -30,7 +30,7 @@ export function ThemeGenerator() {
   const [showBrandDialog, setShowBrandDialog] = React.useState(false)
   const [brandConcept, setBrandConcept] = React.useState<BrandConcept | null>(null)
   const [brandError, setBrandError] = React.useState<string | null>(null)
-  const [brandApiKey, setBrandApiKey] = React.useState<string>("")
+  const [brandEngineConfig, setBrandEngineConfig] = React.useState<EngineConfig | null>(null)
   const [activeTab, setActiveTab] = React.useState<"colors" | "typography" | "other" | "generate">("colors")
   const [previewTab, setPreviewTab] = React.useState<string>("cards")
   const [isLoaded, setIsLoaded] = React.useState(false)
@@ -185,10 +185,10 @@ export function ThemeGenerator() {
   }
 
   // Handle brand concept generation complete
-  const handleBrandComplete = (concept: BrandConcept, apiKey?: string) => {
+  const handleBrandComplete = (concept: BrandConcept, engineConfig?: EngineConfig) => {
     setBrandConcept(concept)
     setBrandError(null)
-    setBrandApiKey(apiKey || "")
+    setBrandEngineConfig(engineConfig || null)
     setShowBrandDialog(true)
   }
 
@@ -211,13 +211,12 @@ export function ThemeGenerator() {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          // Pass custom API key if available
-          ...(brandApiKey && { "X-OpenAI-Key": brandApiKey }),
         },
         body: JSON.stringify({
           brief: brandConcept.brief,
           section,
           existingConcept: brandConcept,
+          engineConfig: brandEngineConfig,
         }),
       })
 
