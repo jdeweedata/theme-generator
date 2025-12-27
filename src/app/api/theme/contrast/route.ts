@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { z } from "zod"
 import { ThemeColorSet, themePresets } from "@/lib/theme-presets"
 import {
-  hslStringToRgb,
-  getRelativeLuminance,
   getContrastRatio,
   meetsWCAG_AA,
   meetsWCAG_AAA,
@@ -15,13 +12,6 @@ import {
 // Contrast Check API
 // GET /api/theme/contrast - Check WCAG compliance for a theme
 // ============================================================================
-
-/**
- * HSL color validation
- */
-const hslColorSchema = z.string().regex(
-  /^\d{1,3}(\.\d+)?\s+\d{1,3}(\.\d+)?%\s+\d{1,3}(\.\d+)?%$/
-)
 
 /**
  * Contrast pair definition
