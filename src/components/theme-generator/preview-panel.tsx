@@ -19,11 +19,8 @@ import {
   TrendingUp,
   TrendingDown,
   Mail,
-  Bell,
   Plus,
   Minus,
-  ChevronLeft,
-  ChevronRight,
 } from "lucide-react"
 
 interface PreviewPanelProps {

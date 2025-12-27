@@ -140,7 +140,7 @@ function ColorInput({ label, value, onChange }: ColorInputProps) {
   )
 }
 
-export function ColorPanel({ colors, isDarkMode, onColorChange }: ColorPanelProps) {
+export function ColorPanel({ colors, isDarkMode: _isDarkMode, onColorChange }: ColorPanelProps) {
   return (
     <div className="divide-y">
       {/* Primary Colors */}

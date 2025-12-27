@@ -183,7 +183,7 @@ export function TypographyPanel({
                 letterSpacing: `${typography.letterSpacing}em`,
               }}
             >
-              Monospace: const hello = "world";
+              Monospace: const hello = &quot;world&quot;;
             </p>
           </div>
         </div>
