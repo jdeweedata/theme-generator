@@ -122,19 +122,23 @@ async function callOpenAI(
 }
 
 // ============================================================================
-// Google Imagen 3 API Integration
+// Google Gemini Image Generation API (using generateContent endpoint)
 // ============================================================================
 
-interface ImagenConfig {
-  numberOfImages?: number // 1-4
-  aspectRatio?: "1:1" | "3:4" | "4:3" | "9:16" | "16:9"
-  personGeneration?: "DONT_ALLOW" | "ALLOW_ADULT" | "ALLOW_ALL"
+interface GeminiImageConfig {
+  aspectRatio?: "1:1" | "2:3" | "3:2" | "3:4" | "4:3" | "4:5" | "5:4" | "9:16" | "16:9" | "21:9"
+  imageSize?: "1K" | "2K" | "4K"
+  model?: "gemini-2.0-flash-exp-image-generation" | "imagen-3.0-generate-002"
 }
 
-interface ImagenResponse {
-  predictions?: {
-    bytesBase64Encoded: string
-    mimeType: string
+interface GeminiImageResponse {
+  candidates?: {
+    content: {
+      parts: Array<
+        | { text: string }
+        | { inlineData: { mimeType: string; data: string } }
+      >
+    }
   }[]
   error?: {
     code: number
@@ -143,35 +147,46 @@ interface ImagenResponse {
   }
 }
 
-async function callImagen(
+async function callGeminiImage(
   prompt: string,
   apiKey: string,
-  config: ImagenConfig = {}
-): Promise<{ images: string[]; mimeType: string }> {
+  config: GeminiImageConfig = {}
+): Promise<{ images: string[]; mimeType: string; text?: string }> {
   if (!apiKey) {
-    throw new Error("Google API key required for Imagen image generation")
+    throw new Error("Google API key required for Gemini image generation")
   }
 
   const {
-    numberOfImages = 1,
-    aspectRatio = "1:1",
-    personGeneration = "DONT_ALLOW",
+    aspectRatio,
+    imageSize,
+    model = "gemini-2.0-flash-exp-image-generation",
   } = config
 
+  // Build generation config
+  const generationConfig: Record<string, unknown> = {
+    responseModalities: ["TEXT", "IMAGE"],
+  }
+  if (aspectRatio) {
+    generationConfig.aspectRatio = aspectRatio
+  }
+  if (imageSize) {
+    generationConfig.imageSize = imageSize
+  }
+
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        instances: [{ prompt }],
-        parameters: {
-          sampleCount: numberOfImages,
-          aspectRatio,
-          personGeneration,
-        },
+        contents: [
+          {
+            parts: [{ text: prompt }],
+          },
+        ],
+        generationConfig,
       }),
     }
   )
@@ -179,7 +194,7 @@ async function callImagen(
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
     const errorMessage =
-      error.error?.message || `Imagen API error: ${response.status}`
+      error.error?.message || `Gemini API error: ${response.status}`
 
     if (response.status === 401 || response.status === 403) {
       throw new Error(
@@ -194,55 +209,70 @@ async function callImagen(
     throw new Error(errorMessage)
   }
 
-  const data: ImagenResponse = await response.json()
+  const data: GeminiImageResponse = await response.json()
 
   if (data.error) {
-    throw new Error(data.error.message || "Imagen generation failed")
+    throw new Error(data.error.message || "Gemini image generation failed")
   }
 
-  if (!data.predictions || data.predictions.length === 0) {
-    throw new Error("No images generated from Imagen API")
+  if (!data.candidates || data.candidates.length === 0) {
+    throw new Error("No response from Gemini API")
   }
 
-  return {
-    images: data.predictions.map((p) => p.bytesBase64Encoded),
-    mimeType: data.predictions[0]?.mimeType || "image/png",
+  const parts = data.candidates[0].content.parts
+  const images: string[] = []
+  let mimeType = "image/png"
+  let text: string | undefined
+
+  for (const part of parts) {
+    if ("inlineData" in part) {
+      images.push(part.inlineData.data)
+      mimeType = part.inlineData.mimeType
+    } else if ("text" in part) {
+      text = part.text
+    }
   }
+
+  if (images.length === 0) {
+    throw new Error("No images generated from Gemini API")
+  }
+
+  return { images, mimeType, text }
 }
 
-// Generate logo using Imagen 3
+// Generate logo using Gemini
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function generateLogoWithImagen(
+async function generateLogoWithGemini(
   prompt: string,
   apiKey: string
-): Promise<{ imageBase64: string; mimeType: string }> {
-  const result = await callImagen(prompt, apiKey, {
-    numberOfImages: 1,
+): Promise<{ imageBase64: string; mimeType: string; description?: string }> {
+  const result = await callGeminiImage(prompt, apiKey, {
     aspectRatio: "1:1",
-    personGeneration: "DONT_ALLOW",
+    imageSize: "1K",
   })
 
   return {
     imageBase64: result.images[0],
     mimeType: result.mimeType,
+    description: result.text,
   }
 }
 
-// Generate hero image using Imagen 3
+// Generate hero image using Gemini
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function generateHeroWithImagen(
+async function generateHeroWithGemini(
   prompt: string,
   apiKey: string
-): Promise<{ imageBase64: string; mimeType: string }> {
-  const result = await callImagen(prompt, apiKey, {
-    numberOfImages: 1,
+): Promise<{ imageBase64: string; mimeType: string; description?: string }> {
+  const result = await callGeminiImage(prompt, apiKey, {
     aspectRatio: "16:9",
-    personGeneration: "ALLOW_ADULT",
+    imageSize: "2K",
   })
 
   return {
     imageBase64: result.images[0],
     mimeType: result.mimeType,
+    description: result.text,
   }
 }
 
@@ -382,23 +412,23 @@ async function generateImage(
       )
     }
 
-    // Map aspect ratio to Imagen format
-    const imagenAspectRatio =
+    // Map aspect ratio to Gemini format
+    const geminiAspectRatio =
       aspectRatio === "landscape"
         ? "16:9"
         : aspectRatio === "portrait"
         ? "9:16"
         : "1:1"
 
-    const result = await callImagen(prompt, apiKey, {
-      numberOfImages: 1,
-      aspectRatio: imagenAspectRatio,
-      personGeneration: "ALLOW_ADULT",
+    const result = await callGeminiImage(prompt, apiKey, {
+      aspectRatio: geminiAspectRatio,
+      imageSize: "1K",
     })
 
     return {
       imageBase64: result.images[0],
       mimeType: result.mimeType,
+      revisedPrompt: result.text,
     }
   } else {
     // DALL-E 3 via OpenAI
