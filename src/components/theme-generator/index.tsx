@@ -12,6 +12,7 @@ import { BrandWizardPanel } from "./brand-wizard-panel"
 import { BrandConceptDialog } from "./brand-concept-dialog"
 import { themePresets, ThemePreset, ThemeColorSet, TypographySettings, defaultTypography } from "@/lib/theme-presets"
 import { BrandConcept, GenerationSection, EngineConfig } from "@/lib/brand-concept-types"
+import { loadThemeFromStorage, saveThemeToStorage } from "@/lib/storage-schema"
 
 export interface ThemeState {
   preset: ThemePreset
@@ -31,7 +32,7 @@ export function ThemeGenerator() {
   const [brandConcept, setBrandConcept] = React.useState<BrandConcept | null>(null)
   const [brandError, setBrandError] = React.useState<string | null>(null)
   const [brandEngineConfig, setBrandEngineConfig] = React.useState<EngineConfig | null>(null)
-  const [activeTab, setActiveTab] = React.useState<"colors" | "typography" | "other" | "generate">("colors")
+  const [activeTab, setActiveTab] = React.useState<"colors" | "typography" | "generate">("colors")
   const [previewTab, setPreviewTab] = React.useState<string>("cards")
   const [isLoaded, setIsLoaded] = React.useState(false)
 
@@ -93,39 +94,52 @@ export function ThemeGenerator() {
     root.style.setProperty("--letter-spacing", `${typography.letterSpacing}em`)
   }, [typography])
 
-  // Load saved state
+  // Load saved state with validation
   React.useEffect(() => {
-    if (typeof window === "undefined") return
-    try {
-      const saved = localStorage.getItem("tweakcn-theme")
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (parsed.preset) {
-          const found = themePresets.find(p => p.name === parsed.preset)
-          if (found) setCurrentPreset(found)
-        }
-        if (parsed.isDarkMode !== undefined) setIsDarkMode(parsed.isDarkMode)
-        if (parsed.customColors) setCustomColors(parsed.customColors)
-        if (parsed.typography) setTypography(parsed.typography)
+    const saved = loadThemeFromStorage()
+    if (saved) {
+      if (saved.preset) {
+        const found = themePresets.find(p => p.name === saved.preset)
+        if (found) setCurrentPreset(found)
       }
-    } catch (e) {
-      console.error("Failed to load saved theme:", e)
+      setIsDarkMode(saved.isDarkMode)
+      if (saved.customColors) {
+        setCustomColors({
+          light: saved.customColors.light || {},
+          dark: saved.customColors.dark || {},
+        })
+      }
+      if (saved.typography) setTypography(saved.typography as TypographySettings)
     }
     setIsLoaded(true)
   }, [])
 
-  // Save state
+  // Debounced save to localStorage with validation (prevents UI jank during rapid color changes)
+  const saveTimeoutRef = React.useRef<NodeJS.Timeout | null>(null)
+
   React.useEffect(() => {
     if (!isLoaded) return
-    try {
-      localStorage.setItem("tweakcn-theme", JSON.stringify({
+
+    // Clear any pending save
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current)
+    }
+
+    // Debounce the save by 500ms
+    saveTimeoutRef.current = setTimeout(() => {
+      saveThemeToStorage({
         preset: currentPreset.name,
         isDarkMode,
         customColors,
         typography,
-      }))
-    } catch (e) {
-      console.error("Failed to save theme:", e)
+      })
+    }, 500)
+
+    // Cleanup on unmount
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current)
+      }
     }
   }, [currentPreset, isDarkMode, customColors, typography, isLoaded])
 
@@ -268,7 +282,7 @@ export function ThemeGenerator() {
         <div className="w-[420px] border-r flex flex-col overflow-hidden">
           {/* Tabs */}
           <div className="flex border-b px-4">
-            {(["colors", "typography", "other", "generate"] as const).map((tab) => (
+            {(["colors", "typography", "generate"] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -298,11 +312,6 @@ export function ThemeGenerator() {
                 onTypographyChange={updateTypography}
                 onReset={resetTypography}
               />
-            )}
-            {activeTab === "other" && (
-              <div className="p-4 text-muted-foreground text-sm">
-                Other settings coming soon...
-              </div>
             )}
             {activeTab === "generate" && (
               <div className="h-full flex flex-col">

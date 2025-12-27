@@ -12,21 +12,14 @@ import {
 import { ThemePreset } from "@/lib/theme-presets"
 import {
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   Moon,
   Sun,
   Undo2,
   Redo2,
   RotateCcw,
-  Upload,
-  Share2,
-  Heart,
   Code2,
   Search,
-  Shuffle,
   Check,
-  MoreVertical,
   Contrast,
 } from "lucide-react"
 
@@ -119,21 +112,9 @@ export function ThemeToolbar({
               <span className="text-sm text-muted-foreground">
                 {filteredPresets.length} themes
               </span>
-              <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon" className="h-8 w-8">
-                  {isDarkMode ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-                </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8">
-                  <Shuffle className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-
-            {/* Save prompt */}
-            <div className="px-3 py-2 border-b flex items-center gap-2 text-sm text-muted-foreground">
-              <Heart className="h-4 w-4" />
-              <span>Save</span>
-              <span>a theme to find it here.</span>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onToggleDarkMode}>
+                {isDarkMode ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+              </Button>
             </div>
 
             {/* Presets list */}
@@ -172,19 +153,7 @@ export function ThemeToolbar({
           </PopoverContent>
         </Popover>
 
-        {/* Navigation arrows */}
-        <Button variant="ghost" size="icon" className="h-8 w-8">
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <Button variant="ghost" size="icon" className="h-8 w-8">
-          <ChevronRight className="h-4 w-4" />
-        </Button>
       </div>
-
-      {/* Center - More options */}
-      <Button variant="ghost" size="icon" className="h-8 w-8">
-        <MoreVertical className="h-4 w-4" />
-      </Button>
 
       {/* Right side - Actions */}
       <div className="flex items-center gap-1">
@@ -226,26 +195,6 @@ export function ThemeToolbar({
         <Button variant="ghost" size="sm" className="gap-2" onClick={onReset}>
           <RotateCcw className="h-4 w-4" />
           Reset
-        </Button>
-
-        {/* Import */}
-        <Button variant="ghost" size="sm" className="gap-2">
-          <Upload className="h-4 w-4" />
-          Import
-        </Button>
-
-        <div className="w-px h-6 bg-border mx-1" />
-
-        {/* Share */}
-        <Button variant="ghost" size="sm" className="gap-2">
-          <Share2 className="h-4 w-4" />
-          Share
-        </Button>
-
-        {/* Save */}
-        <Button variant="ghost" size="sm" className="gap-2">
-          <Heart className="h-4 w-4" />
-          Save
         </Button>
 
         {/* Contrast Checker */}

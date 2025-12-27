@@ -1,92 +1,14 @@
 import { ThemePreset, ThemeColorSet, TypographySettings, defaultTypography } from "./theme-presets"
 import { BrandConcept, BrandVisual, BrandTokens } from "./brand-concept-types"
+import {
+  hexToHslString,
+  getContrastForeground,
+  darkenHex,
+  lightenHex,
+} from "./color-utils"
 
-// ============================================================================
-// Color Conversion Utilities
-// ============================================================================
-
-/**
- * Convert hex color to HSL string (without hsl() wrapper)
- * Returns format: "210 80% 50%"
- */
-export function hexToHsl(hex: string): string {
-  // Remove # if present
-  hex = hex.replace(/^#/, "")
-
-  // Validate hex format
-  if (!/^[0-9A-Fa-f]{6}$/.test(hex)) {
-    console.error(`Invalid hex color: #${hex}`)
-    return "0 0% 50%" // Return neutral gray as fallback
-  }
-
-  // Parse hex
-  const r = parseInt(hex.slice(0, 2), 16) / 255
-  const g = parseInt(hex.slice(2, 4), 16) / 255
-  const b = parseInt(hex.slice(4, 6), 16) / 255
-
-  const max = Math.max(r, g, b)
-  const min = Math.min(r, g, b)
-  let h = 0
-  let s = 0
-  const l = (max + min) / 2
-
-  if (max !== min) {
-    const d = max - min
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
-
-    switch (max) {
-      case r:
-        h = ((g - b) / d + (g < b ? 6 : 0)) / 6
-        break
-      case g:
-        h = ((b - r) / d + 2) / 6
-        break
-      case b:
-        h = ((r - g) / d + 4) / 6
-        break
-    }
-  }
-
-  return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`
-}
-
-/**
- * Generate a foreground color (light or dark) based on background luminance
- */
-function getContrastForeground(bgHex: string): string {
-  const hex = bgHex.replace(/^#/, "")
-  const r = parseInt(hex.slice(0, 2), 16)
-  const g = parseInt(hex.slice(2, 4), 16)
-  const b = parseInt(hex.slice(4, 6), 16)
-
-  // Calculate relative luminance
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-
-  // Return light or dark foreground
-  return luminance > 0.5 ? "0 0% 9%" : "0 0% 98%"
-}
-
-/**
- * Darken a hex color by a percentage
- */
-function darkenHex(hex: string, percent: number): string {
-  hex = hex.replace(/^#/, "")
-  const r = Math.max(0, Math.round(parseInt(hex.slice(0, 2), 16) * (1 - percent / 100)))
-  const g = Math.max(0, Math.round(parseInt(hex.slice(2, 4), 16) * (1 - percent / 100)))
-  const b = Math.max(0, Math.round(parseInt(hex.slice(4, 6), 16) * (1 - percent / 100)))
-  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`
-}
-
-/**
- * Lighten a hex color by a percentage
- */
-function lightenHex(hex: string, percent: number): string {
-  hex = hex.replace(/^#/, "")
-  const r = Math.min(255, Math.round(parseInt(hex.slice(0, 2), 16) + (255 - parseInt(hex.slice(0, 2), 16)) * (percent / 100)))
-  const g = Math.min(255, Math.round(parseInt(hex.slice(2, 4), 16) + (255 - parseInt(hex.slice(2, 4), 16)) * (percent / 100)))
-  const b = Math.min(255, Math.round(parseInt(hex.slice(4, 6), 16) + (255 - parseInt(hex.slice(4, 6), 16)) * (percent / 100)))
-  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`
-}
+// Re-export for backwards compatibility
+export { hexToHslString as hexToHsl } from "./color-utils"
 
 // ============================================================================
 // Theme Preset Generation
@@ -104,29 +26,29 @@ function visualToLightColorSet(visual: BrandVisual): ThemeColorSet {
 
   return {
     background: "0 0% 100%",
-    foreground: hexToHsl(neutralDark),
+    foreground: hexToHslString(neutralDark),
     card: "0 0% 100%",
-    cardForeground: hexToHsl(neutralDark),
+    cardForeground: hexToHslString(neutralDark),
     popover: "0 0% 100%",
-    popoverForeground: hexToHsl(neutralDark),
-    primary: hexToHsl(primary),
+    popoverForeground: hexToHslString(neutralDark),
+    primary: hexToHslString(primary),
     primaryForeground: getContrastForeground(primary),
-    secondary: hexToHsl(lightenHex(secondary, 85)),
-    secondaryForeground: hexToHsl(secondary),
-    muted: hexToHsl(lightenHex(neutralLight, 50)),
-    mutedForeground: hexToHsl(lightenHex(neutralDark, 40)),
-    accent: hexToHsl(lightenHex(accent, 85)),
-    accentForeground: hexToHsl(accent),
+    secondary: hexToHslString(lightenHex(secondary, 85)),
+    secondaryForeground: hexToHslString(secondary),
+    muted: hexToHslString(lightenHex(neutralLight, 50)),
+    mutedForeground: hexToHslString(lightenHex(neutralDark, 40)),
+    accent: hexToHslString(lightenHex(accent, 85)),
+    accentForeground: hexToHslString(accent),
     destructive: "0 84% 60%",
     destructiveForeground: "0 0% 98%",
-    border: hexToHsl(lightenHex(neutralLight, 20)),
-    input: hexToHsl(lightenHex(neutralLight, 20)),
-    ring: hexToHsl(primary),
-    chart1: hexToHsl(primary),
-    chart2: hexToHsl(secondary),
-    chart3: hexToHsl(accent),
-    chart4: hexToHsl(lightenHex(primary, 30)),
-    chart5: hexToHsl(lightenHex(secondary, 30)),
+    border: hexToHslString(lightenHex(neutralLight, 20)),
+    input: hexToHslString(lightenHex(neutralLight, 20)),
+    ring: hexToHslString(primary),
+    chart1: hexToHslString(primary),
+    chart2: hexToHslString(secondary),
+    chart3: hexToHslString(accent),
+    chart4: hexToHslString(lightenHex(primary, 30)),
+    chart5: hexToHslString(lightenHex(secondary, 30)),
     radius: "0.5rem",
   }
 }
@@ -141,30 +63,30 @@ function visualToDarkColorSet(visual: BrandVisual): ThemeColorSet {
   const neutralDark = visual.colorPalette.neutralDark.hex
 
   return {
-    background: hexToHsl(darkenHex(neutralDark, 50)),
+    background: hexToHslString(darkenHex(neutralDark, 50)),
     foreground: "0 0% 98%",
-    card: hexToHsl(darkenHex(neutralDark, 40)),
+    card: hexToHslString(darkenHex(neutralDark, 40)),
     cardForeground: "0 0% 98%",
-    popover: hexToHsl(darkenHex(neutralDark, 40)),
+    popover: hexToHslString(darkenHex(neutralDark, 40)),
     popoverForeground: "0 0% 98%",
-    primary: hexToHsl(primary),
+    primary: hexToHslString(primary),
     primaryForeground: getContrastForeground(primary),
-    secondary: hexToHsl(darkenHex(secondary, 60)),
+    secondary: hexToHslString(darkenHex(secondary, 60)),
     secondaryForeground: "0 0% 98%",
-    muted: hexToHsl(darkenHex(neutralDark, 30)),
+    muted: hexToHslString(darkenHex(neutralDark, 30)),
     mutedForeground: "0 0% 65%",
-    accent: hexToHsl(darkenHex(accent, 60)),
+    accent: hexToHslString(darkenHex(accent, 60)),
     accentForeground: "0 0% 98%",
     destructive: "0 62% 50%",
     destructiveForeground: "0 0% 98%",
-    border: hexToHsl(darkenHex(neutralDark, 20)),
-    input: hexToHsl(darkenHex(neutralDark, 20)),
-    ring: hexToHsl(primary),
-    chart1: hexToHsl(primary),
-    chart2: hexToHsl(secondary),
-    chart3: hexToHsl(accent),
-    chart4: hexToHsl(lightenHex(primary, 20)),
-    chart5: hexToHsl(lightenHex(secondary, 20)),
+    border: hexToHslString(darkenHex(neutralDark, 20)),
+    input: hexToHslString(darkenHex(neutralDark, 20)),
+    ring: hexToHslString(primary),
+    chart1: hexToHslString(primary),
+    chart2: hexToHslString(secondary),
+    chart3: hexToHslString(accent),
+    chart4: hexToHslString(lightenHex(primary, 20)),
+    chart5: hexToHslString(lightenHex(secondary, 20)),
     radius: "0.5rem",
   }
 }

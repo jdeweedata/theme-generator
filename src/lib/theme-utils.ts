@@ -1,9 +1,12 @@
-// HSL color type
-export interface HSLColor {
-  h: number // 0-360
-  s: number // 0-100
-  l: number // 0-100
-}
+import {
+  HSLColor,
+  hslColorToString,
+  hslColorToHex,
+  hexToHslColor,
+} from "./color-utils"
+
+// Re-export HSLColor for backwards compatibility
+export type { HSLColor }
 
 // Theme color configuration
 export interface ThemeColors {
@@ -28,94 +31,17 @@ export interface Theme {
 
 // Convert HSL to CSS string format (without hsl() wrapper)
 export function hslToString(color: HSLColor): string {
-  return `${color.h} ${color.s}% ${color.l}%`
+  return hslColorToString(color)
 }
 
 // Convert HSL to HEX
 export function hslToHex(color: HSLColor): string {
-  const { h, s, l } = color
-  const sNorm = s / 100
-  const lNorm = l / 100
-
-  const c = (1 - Math.abs(2 * lNorm - 1)) * sNorm
-  const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
-  const m = lNorm - c / 2
-
-  let r = 0,
-    g = 0,
-    b = 0
-
-  if (h < 60) {
-    r = c
-    g = x
-    b = 0
-  } else if (h < 120) {
-    r = x
-    g = c
-    b = 0
-  } else if (h < 180) {
-    r = 0
-    g = c
-    b = x
-  } else if (h < 240) {
-    r = 0
-    g = x
-    b = c
-  } else if (h < 300) {
-    r = x
-    g = 0
-    b = c
-  } else {
-    r = c
-    g = 0
-    b = x
-  }
-
-  const toHex = (n: number) => {
-    const hex = Math.round((n + m) * 255).toString(16)
-    return hex.length === 1 ? "0" + hex : hex
-  }
-
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`
+  return hslColorToHex(color)
 }
 
 // Convert HEX to HSL
 export function hexToHsl(hex: string): HSLColor {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-  if (!result) return { h: 0, s: 0, l: 0 }
-
-  const r = parseInt(result[1], 16) / 255
-  const g = parseInt(result[2], 16) / 255
-  const b = parseInt(result[3], 16) / 255
-
-  const max = Math.max(r, g, b)
-  const min = Math.min(r, g, b)
-  let h = 0
-  let s = 0
-  const l = (max + min) / 2
-
-  if (max !== min) {
-    const d = max - min
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
-
-    switch (max) {
-      case r:
-        h = ((g - b) / d + (g < b ? 6 : 0)) / 6
-        break
-      case g:
-        h = ((b - r) / d + 2) / 6
-        break
-      case b:
-        h = ((r - g) / d + 4) / 6
-        break
-    }
-  }
-
-  return {
-    h: Math.round(h * 360),
-    s: Math.round(s * 100),
-    l: Math.round(l * 100),
-  }
+  return hexToHslColor(hex)
 }
 
 // Generate appropriate foreground color based on background lightness

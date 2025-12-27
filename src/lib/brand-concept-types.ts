@@ -285,27 +285,3 @@ export interface BrandConcept {
 export type WizardStep = "brief" | "review" | "generating" | "complete"
 
 export type GenerationSection = "strategy" | "naming" | "visual" | "prompts" | "tokens"
-
-export interface GenerationProgress {
-  currentSection: GenerationSection | null
-  completedSections: GenerationSection[]
-  progress: number // 0-100
-  status: "idle" | "generating" | "success" | "error"
-  error?: string
-}
-
-// ============================================================================
-// API Types
-// ============================================================================
-
-export interface GenerateBrandRequest {
-  brief: BrandBriefInput
-  regenerateSections?: GenerationSection[]
-  existingConcept?: BrandConcept
-}
-
-export interface GenerateBrandResponse {
-  success: boolean
-  concept?: BrandConcept
-  error?: string
-}

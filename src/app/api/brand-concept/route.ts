@@ -26,6 +26,12 @@ import {
   getPromptsPrompt,
   getAppliedExamplesPrompt,
 } from "@/lib/ai-prompts"
+import {
+  checkRateLimit,
+  rateLimitExceededResponse,
+  rateLimitHeaders,
+  aiOperationRateLimitConfig,
+} from "@/lib/rate-limit"
 
 // ============================================================================
 // Security: API Key Redaction for Logging
@@ -156,163 +162,6 @@ async function callOpenAI(
 }
 
 // ============================================================================
-// Google Gemini Image Generation API (using generateContent endpoint)
-// ============================================================================
-
-interface GeminiImageConfig {
-  aspectRatio?: "1:1" | "2:3" | "3:2" | "3:4" | "4:3" | "4:5" | "5:4" | "9:16" | "16:9" | "21:9"
-  imageSize?: "1K" | "2K" | "4K"
-  model?: "gemini-2.0-flash-exp-image-generation" | "imagen-3.0-generate-002"
-}
-
-interface GeminiImageResponse {
-  candidates?: {
-    content: {
-      parts: Array<
-        | { text: string }
-        | { inlineData: { mimeType: string; data: string } }
-      >
-    }
-  }[]
-  error?: {
-    code: number
-    message: string
-    status: string
-  }
-}
-
-async function callGeminiImage(
-  prompt: string,
-  apiKey: string,
-  config: GeminiImageConfig = {}
-): Promise<{ images: string[]; mimeType: string; text?: string }> {
-  if (!apiKey) {
-    throw new Error("Google API key required for Gemini image generation")
-  }
-
-  const {
-    aspectRatio,
-    imageSize,
-    model = "gemini-2.0-flash-exp-image-generation",
-  } = config
-
-  // Build generation config
-  const generationConfig: Record<string, unknown> = {
-    responseModalities: ["TEXT", "IMAGE"],
-  }
-  if (aspectRatio) {
-    generationConfig.aspectRatio = aspectRatio
-  }
-  if (imageSize) {
-    generationConfig.imageSize = imageSize
-  }
-
-  // Use header-based auth instead of URL query parameter to prevent key exposure in logs
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": apiKey,
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [{ text: prompt }],
-          },
-        ],
-        generationConfig,
-      }),
-    }
-  )
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}))
-    const errorMessage =
-      error.error?.message || `Gemini API error: ${response.status}`
-
-    if (response.status === 401 || response.status === 403) {
-      throw new Error(
-        "Your Google API key failed. Please check your API key or remove it to use our default system."
-      )
-    }
-    if (response.status === 429) {
-      throw new Error(
-        "Your Google API key hit rate limits. Please try again later or check your quota."
-      )
-    }
-    throw new Error(errorMessage)
-  }
-
-  const data: GeminiImageResponse = await response.json()
-
-  if (data.error) {
-    throw new Error(data.error.message || "Gemini image generation failed")
-  }
-
-  if (!data.candidates || data.candidates.length === 0) {
-    throw new Error("No response from Gemini API")
-  }
-
-  const parts = data.candidates[0].content.parts
-  const images: string[] = []
-  let mimeType = "image/png"
-  let text: string | undefined
-
-  for (const part of parts) {
-    if ("inlineData" in part) {
-      images.push(part.inlineData.data)
-      mimeType = part.inlineData.mimeType
-    } else if ("text" in part) {
-      text = part.text
-    }
-  }
-
-  if (images.length === 0) {
-    throw new Error("No images generated from Gemini API")
-  }
-
-  return { images, mimeType, text }
-}
-
-// Generate logo using Gemini
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function generateLogoWithGemini(
-  prompt: string,
-  apiKey: string
-): Promise<{ imageBase64: string; mimeType: string; description?: string }> {
-  const result = await callGeminiImage(prompt, apiKey, {
-    aspectRatio: "1:1",
-    imageSize: "1K",
-  })
-
-  return {
-    imageBase64: result.images[0],
-    mimeType: result.mimeType,
-    description: result.text,
-  }
-}
-
-// Generate hero image using Gemini
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function generateHeroWithGemini(
-  prompt: string,
-  apiKey: string
-): Promise<{ imageBase64: string; mimeType: string; description?: string }> {
-  const result = await callGeminiImage(prompt, apiKey, {
-    aspectRatio: "16:9",
-    imageSize: "2K",
-  })
-
-  return {
-    imageBase64: result.images[0],
-    mimeType: result.mimeType,
-    description: result.text,
-  }
-}
-
-// ============================================================================
 // Strategy Engine Wrapper
 // ============================================================================
 
@@ -340,150 +189,6 @@ async function callStrategyEngine(
       )
     }
     return callOpenAI(messages, apiKey)
-  }
-}
-
-// ============================================================================
-// DALL-E 3 API Integration
-// ============================================================================
-
-interface DallEResponse {
-  data?: {
-    url?: string
-    b64_json?: string
-    revised_prompt?: string
-  }[]
-  error?: {
-    message: string
-    type: string
-    code: string
-  }
-}
-
-async function callDallE(
-  prompt: string,
-  apiKey: string,
-  config: { size?: "1024x1024" | "1792x1024" | "1024x1792"; quality?: "standard" | "hd" } = {}
-): Promise<{ imageBase64: string; mimeType: string; revisedPrompt?: string }> {
-  if (!apiKey) {
-    throw new Error("OpenAI API key required for DALL-E 3 image generation")
-  }
-
-  const { size = "1024x1024", quality = "standard" } = config
-
-  const response = await fetch("https://api.openai.com/v1/images/generations", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "dall-e-3",
-      prompt,
-      n: 1,
-      size,
-      quality,
-      response_format: "b64_json",
-    }),
-  })
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}))
-    const errorMessage = error.error?.message || `DALL-E API error: ${response.status}`
-
-    if (response.status === 401) {
-      throw new Error(
-        "Your OpenAI API key failed. Please check your API key or remove it to use our default system."
-      )
-    }
-    if (response.status === 429) {
-      throw new Error(
-        "Your OpenAI API key hit rate limits. Please try again later or check your quota."
-      )
-    }
-    throw new Error(errorMessage)
-  }
-
-  const data: DallEResponse = await response.json()
-
-  if (data.error) {
-    throw new Error(data.error.message || "DALL-E generation failed")
-  }
-
-  if (!data.data || data.data.length === 0 || !data.data[0].b64_json) {
-    throw new Error("No images generated from DALL-E API")
-  }
-
-  return {
-    imageBase64: data.data[0].b64_json,
-    mimeType: "image/png",
-    revisedPrompt: data.data[0].revised_prompt,
-  }
-}
-
-// ============================================================================
-// Visual Engine Wrapper
-// ============================================================================
-
-interface GeneratedImage {
-  imageBase64: string
-  mimeType: string
-  revisedPrompt?: string
-}
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function generateImage(
-  prompt: string,
-  engineConfig: EngineConfig,
-  options: { aspectRatio?: "square" | "landscape" | "portrait" } = {}
-): Promise<GeneratedImage> {
-  const { visualEngine, userKeys } = engineConfig
-  const { aspectRatio = "square" } = options
-
-  if (visualEngine === "gemini-imagen") {
-    const apiKey = userKeys.google || process.env.GOOGLE_API_KEY
-    if (!apiKey) {
-      throw new Error(
-        "Google API key not configured. Please add your API key in Advanced settings, or configure GOOGLE_API_KEY in environment variables."
-      )
-    }
-
-    // Map aspect ratio to Gemini format
-    const geminiAspectRatio =
-      aspectRatio === "landscape"
-        ? "16:9"
-        : aspectRatio === "portrait"
-        ? "9:16"
-        : "1:1"
-
-    const result = await callGeminiImage(prompt, apiKey, {
-      aspectRatio: geminiAspectRatio,
-      imageSize: "1K",
-    })
-
-    return {
-      imageBase64: result.images[0],
-      mimeType: result.mimeType,
-      revisedPrompt: result.text,
-    }
-  } else {
-    // DALL-E 3 via OpenAI
-    const apiKey = userKeys.openai || process.env.OPENAI_API_KEY
-    if (!apiKey) {
-      throw new Error(
-        "OpenAI API key not configured for DALL-E 3. Please add your API key in Advanced settings."
-      )
-    }
-
-    // Map aspect ratio to DALL-E format
-    const dalleSize =
-      aspectRatio === "landscape"
-        ? "1792x1024"
-        : aspectRatio === "portrait"
-        ? "1024x1792"
-        : "1024x1024"
-
-    return callDallE(prompt, apiKey, { size: dalleSize as "1024x1024" | "1792x1024" | "1024x1792" })
   }
 }
 
@@ -643,6 +348,12 @@ async function generateAppliedExamples(
 // ============================================================================
 
 export async function POST(request: NextRequest) {
+  // Check rate limit first (before any expensive operations)
+  const rateLimitResult = checkRateLimit(request, aiOperationRateLimitConfig)
+  if (!rateLimitResult.success) {
+    return rateLimitExceededResponse(rateLimitResult)
+  }
+
   try {
     // Parse request body
     const body = await request.json()
@@ -678,31 +389,28 @@ export async function POST(request: NextRequest) {
     // Determine which sections to generate
     const sectionsToGenerate = new Set(sections)
 
-    // Generate sections in order (some depend on others)
-    let brandName = brief.existingName
+    // Generate sections with parallelization where possible
+    // Phase 1: Strategy and Naming in parallel (independent)
+    const [strategy, naming] = await Promise.all([
+      sectionsToGenerate.has("strategy")
+        ? generateStrategy(brief, engineConfig).catch((error) => {
+            console.error("Strategy generation failed:", safeErrorMessage(error))
+            throw error
+          })
+        : Promise.resolve(undefined),
+      sectionsToGenerate.has("naming")
+        ? generateNaming(brief, engineConfig).catch((error) => {
+            console.error("Naming generation failed:", safeErrorMessage(error))
+            throw error
+          })
+        : Promise.resolve(undefined),
+    ])
 
-    // Strategy
-    if (sectionsToGenerate.has("strategy")) {
-      try {
-        concept.strategy = await generateStrategy(brief, engineConfig)
-      } catch (error) {
-        console.error("Strategy generation failed:", safeErrorMessage(error))
-        throw error // Re-throw to show user-friendly error
-      }
-    }
+    concept.strategy = strategy
+    concept.naming = naming
+    const brandName = naming?.primaryName || brief.existingName
 
-    // Naming
-    if (sectionsToGenerate.has("naming")) {
-      try {
-        concept.naming = await generateNaming(brief, engineConfig)
-        brandName = concept.naming.primaryName || brandName
-      } catch (error) {
-        console.error("Naming generation failed:", safeErrorMessage(error))
-        throw error
-      }
-    }
-
-    // Visual
+    // Phase 2: Visual (depends on naming for brandName)
     if (sectionsToGenerate.has("visual") || sectionsToGenerate.has("tokens")) {
       try {
         concept.visual = await generateVisual(brief, brandName, engineConfig)
@@ -712,47 +420,37 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Prompts
-    if (sectionsToGenerate.has("prompts")) {
-      try {
-        concept.prompts = await generatePrompts(
-          brief,
-          brandName,
-          concept.visual,
-          engineConfig
-        )
-      } catch (error) {
-        console.error("Prompts generation failed:", safeErrorMessage(error))
-        throw error
-      }
-    }
+    // Phase 3: Prompts and Applied Examples in parallel (after their dependencies)
+    const [prompts, appliedExamples] = await Promise.all([
+      sectionsToGenerate.has("prompts")
+        ? generatePrompts(brief, brandName, concept.visual, engineConfig).catch((error) => {
+            console.error("Prompts generation failed:", safeErrorMessage(error))
+            throw error
+          })
+        : Promise.resolve(undefined),
+      sectionsToGenerate.has("strategy") || sectionsToGenerate.has("naming")
+        ? generateAppliedExamples(brief, brandName, concept.strategy, concept.naming, engineConfig).catch((error) => {
+            console.error("Applied examples generation failed:", safeErrorMessage(error))
+            throw error
+          })
+        : Promise.resolve(undefined),
+    ])
 
-    // Applied Examples (generated with strategy and naming context)
-    if (
-      sectionsToGenerate.has("strategy") ||
-      sectionsToGenerate.has("naming")
-    ) {
-      try {
-        concept.appliedExamples = await generateAppliedExamples(
-          brief,
-          brandName,
-          concept.strategy,
-          concept.naming,
-          engineConfig
-        )
-      } catch (error) {
-        console.error("Applied examples generation failed:", safeErrorMessage(error))
-        throw error
-      }
-    }
+    concept.prompts = prompts
+    concept.appliedExamples = appliedExamples
 
     // Update timestamp
     concept.generatedAt = new Date().toISOString()
 
-    return NextResponse.json({
-      success: true,
-      concept,
-    })
+    return NextResponse.json(
+      {
+        success: true,
+        concept,
+      },
+      {
+        headers: rateLimitHeaders(rateLimitResult),
+      }
+    )
   } catch (error) {
     console.error("Brand concept generation error:", safeErrorMessage(error))
     return NextResponse.json(
@@ -773,6 +471,12 @@ export async function POST(request: NextRequest) {
 // ============================================================================
 
 export async function PATCH(request: NextRequest) {
+  // Check rate limit first (before any expensive operations)
+  const rateLimitResult = checkRateLimit(request, aiOperationRateLimitConfig)
+  if (!rateLimitResult.success) {
+    return rateLimitExceededResponse(rateLimitResult)
+  }
+
   try {
     const body = await request.json()
     const { brief, section, existingConcept, engineConfig: userEngineConfig } = body as {
@@ -814,11 +518,16 @@ export async function PATCH(request: NextRequest) {
 
     concept.generatedAt = new Date().toISOString()
 
-    return NextResponse.json({
-      success: true,
-      concept,
-      regeneratedSection: section,
-    })
+    return NextResponse.json(
+      {
+        success: true,
+        concept,
+        regeneratedSection: section,
+      },
+      {
+        headers: rateLimitHeaders(rateLimitResult),
+      }
+    )
   } catch (error) {
     console.error("Section regeneration error:", safeErrorMessage(error))
     return NextResponse.json(
@@ -833,5 +542,3 @@ export async function PATCH(request: NextRequest) {
     )
   }
 }
-
-// Note: callVisualEngine is available internally for future image generation features
