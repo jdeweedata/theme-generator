@@ -43,6 +43,7 @@ import {
   Settings2,
   Brain,
   ImageIcon,
+  ShieldAlert,
 } from "lucide-react"
 
 interface BrandWizardPanelProps {
@@ -351,6 +352,21 @@ export function BrandWizardPanel({ onComplete, onError }: BrandWizardPanelProps)
         </button>
         {showAdvanced && (
           <div className="px-3 pb-4 space-y-5 border-t bg-muted/30">
+            {/* Security Warning for BYOK */}
+            <div className="pt-4">
+              <div className="flex items-start gap-2 p-3 text-xs rounded-md bg-amber-50 border border-amber-200 dark:bg-amber-950/30 dark:border-amber-900">
+                <ShieldAlert className="h-4 w-4 text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-medium text-amber-800 dark:text-amber-400">
+                    Security Notice
+                  </p>
+                  <p className="text-amber-700 dark:text-amber-300/80">
+                    API keys you enter are transmitted over HTTPS but stored only in your browser.
+                    For production use, configure keys via environment variables on the server.
+                  </p>
+                </div>
+              </div>
+            </div>
             {/* Strategy Engine Section */}
             <div className="pt-4 space-y-3">
               <div className="flex items-center gap-2 text-sm font-medium">

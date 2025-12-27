@@ -1,4 +1,5 @@
 import { BrandBriefInput, GenerationSection } from "./brand-concept-types"
+import { sanitizeBrandBrief } from "./prompt-sanitizer"
 
 // ============================================================================
 // System Prompts for Brand Generation
@@ -23,20 +24,21 @@ Output format: Always respond with valid JSON matching the requested structure.`
 // ============================================================================
 
 export function getStrategyPrompt(brief: BrandBriefInput): string {
+  const safeBrief = sanitizeBrandBrief(brief)
   return `Generate a brand strategy for this business:
 
 BUSINESS DESCRIPTION:
-${brief.businessDescription}
+${safeBrief.businessDescription}
 
 TARGET AUDIENCE:
-${brief.targetAudience}
+${safeBrief.targetAudience}
 
 BRAND PERSONALITY:
-${brief.personality.join(", ")}
+${safeBrief.personality.join(", ")}
 
-${brief.constraints ? `CONSTRAINTS:\n${brief.constraints}` : ""}
-${brief.competitors ? `COMPETITORS/REFERENCES:\n${brief.competitors}` : ""}
-${brief.existingName ? `EXISTING BRAND NAME: ${brief.existingName}` : ""}
+${safeBrief.constraints ? `CONSTRAINTS:\n${safeBrief.constraints}` : ""}
+${safeBrief.competitors ? `COMPETITORS/REFERENCES:\n${safeBrief.competitors}` : ""}
+${safeBrief.existingName ? `EXISTING BRAND NAME: ${safeBrief.existingName}` : ""}
 
 Generate a brand strategy with:
 1. Brand purpose (why the brand exists beyond profit)
@@ -61,23 +63,24 @@ Respond with JSON in this exact format:
 }
 
 export function getNamingPrompt(brief: BrandBriefInput): string {
+  const safeBrief = sanitizeBrandBrief(brief)
   return `Generate naming and verbal identity for this business:
 
 BUSINESS DESCRIPTION:
-${brief.businessDescription}
+${safeBrief.businessDescription}
 
 TARGET AUDIENCE:
-${brief.targetAudience}
+${safeBrief.targetAudience}
 
 BRAND PERSONALITY:
-${brief.personality.join(", ")}
+${safeBrief.personality.join(", ")}
 
-${brief.constraints ? `CONSTRAINTS:\n${brief.constraints}` : ""}
-${brief.existingName ? `EXISTING BRAND NAME TO KEEP: ${brief.existingName}` : "Generate 10-15 name candidates."}
+${safeBrief.constraints ? `CONSTRAINTS:\n${safeBrief.constraints}` : ""}
+${safeBrief.existingName ? `EXISTING BRAND NAME TO KEEP: ${safeBrief.existingName}` : "Generate 10-15 name candidates."}
 
 Generate:
-1. Primary name recommendation (${brief.existingName ? "use the existing name" : "your top pick"}) with rationale
-2. ${brief.existingName ? "5 alternative names if they want to rebrand" : "10-15 alternative name options"} with brief rationale for each
+1. Primary name recommendation (${safeBrief.existingName ? "use the existing name" : "your top pick"}) with rationale
+2. ${safeBrief.existingName ? "5 alternative names if they want to rebrand" : "10-15 alternative name options"} with brief rationale for each
 3. 5 tagline options that work with the primary name
 4. Tone of voice guide with description, dos, don'ts, and example phrases
 
@@ -102,21 +105,22 @@ Respond with JSON in this exact format:
 }
 
 export function getVisualPrompt(brief: BrandBriefInput, brandName?: string): string {
+  const safeBrief = sanitizeBrandBrief(brief)
   return `Generate visual identity specifications for this brand:
 
-BRAND NAME: ${brandName || brief.existingName || "TBD"}
+BRAND NAME: ${brandName || safeBrief.existingName || "TBD"}
 
 BUSINESS DESCRIPTION:
-${brief.businessDescription}
+${safeBrief.businessDescription}
 
 TARGET AUDIENCE:
-${brief.targetAudience}
+${safeBrief.targetAudience}
 
 BRAND PERSONALITY:
-${brief.personality.join(", ")}
+${safeBrief.personality.join(", ")}
 
-${brief.constraints ? `CONSTRAINTS:\n${brief.constraints}` : ""}
-${brief.existingLogoDescription ? `EXISTING LOGO DESCRIPTION:\n${brief.existingLogoDescription}` : ""}
+${safeBrief.constraints ? `CONSTRAINTS:\n${safeBrief.constraints}` : ""}
+${safeBrief.existingLogoDescription ? `EXISTING LOGO DESCRIPTION:\n${safeBrief.existingLogoDescription}` : ""}
 
 Generate:
 1. Color palette with 5 colors (primary, secondary, accent, neutral light, neutral dark)
@@ -157,15 +161,16 @@ Respond with JSON in this exact format:
 }
 
 export function getPromptsPrompt(brief: BrandBriefInput, brandName?: string, visual?: string): string {
+  const safeBrief = sanitizeBrandBrief(brief)
   return `Generate AI image generation prompts for this brand:
 
-BRAND NAME: ${brandName || brief.existingName || "TBD"}
+BRAND NAME: ${brandName || safeBrief.existingName || "TBD"}
 
 BUSINESS DESCRIPTION:
-${brief.businessDescription}
+${safeBrief.businessDescription}
 
 BRAND PERSONALITY:
-${brief.personality.join(", ")}
+${safeBrief.personality.join(", ")}
 
 ${visual ? `VISUAL IDENTITY CONTEXT:\n${visual}` : ""}
 
@@ -187,15 +192,16 @@ Respond with JSON in this exact format:
 }
 
 export function getAppliedExamplesPrompt(brief: BrandBriefInput, brandName?: string, strategy?: string, naming?: string): string {
+  const safeBrief = sanitizeBrandBrief(brief)
   return `Generate applied brand examples for this brand:
 
-BRAND NAME: ${brandName || brief.existingName || "TBD"}
+BRAND NAME: ${brandName || safeBrief.existingName || "TBD"}
 
 BUSINESS DESCRIPTION:
-${brief.businessDescription}
+${safeBrief.businessDescription}
 
 TARGET AUDIENCE:
-${brief.targetAudience}
+${safeBrief.targetAudience}
 
 ${strategy ? `BRAND STRATEGY CONTEXT:\n${strategy}` : ""}
 ${naming ? `VERBAL IDENTITY CONTEXT:\n${naming}` : ""}
@@ -235,6 +241,7 @@ Respond with JSON in this exact format:
 // ============================================================================
 
 export function getFullBrandPrompt(brief: BrandBriefInput, sections: GenerationSection[]): string {
+  const safeBrief = sanitizeBrandBrief(brief)
   const sectionDescriptions: Record<GenerationSection, string> = {
     strategy: "Brand strategy (purpose, promise, positioning, differentiators, messaging pillars)",
     naming: "Naming & verbal identity (name candidates, taglines, tone of voice)",
@@ -251,18 +258,18 @@ export function getFullBrandPrompt(brief: BrandBriefInput, sections: GenerationS
   return `Generate a comprehensive brand concept for this business:
 
 BUSINESS DESCRIPTION:
-${brief.businessDescription}
+${safeBrief.businessDescription}
 
 TARGET AUDIENCE:
-${brief.targetAudience}
+${safeBrief.targetAudience}
 
 BRAND PERSONALITY:
-${brief.personality.join(", ")}
+${safeBrief.personality.join(", ")}
 
-${brief.constraints ? `CONSTRAINTS:\n${brief.constraints}` : ""}
-${brief.competitors ? `COMPETITORS/REFERENCES:\n${brief.competitors}` : ""}
-${brief.existingName ? `EXISTING BRAND NAME: ${brief.existingName}` : ""}
-${brief.existingLogoDescription ? `EXISTING LOGO:\n${brief.existingLogoDescription}` : ""}
+${safeBrief.constraints ? `CONSTRAINTS:\n${safeBrief.constraints}` : ""}
+${safeBrief.competitors ? `COMPETITORS/REFERENCES:\n${safeBrief.competitors}` : ""}
+${safeBrief.existingName ? `EXISTING BRAND NAME: ${safeBrief.existingName}` : ""}
+${safeBrief.existingLogoDescription ? `EXISTING LOGO:\n${safeBrief.existingLogoDescription}` : ""}
 
 SECTIONS TO GENERATE:
 ${requestedSections}

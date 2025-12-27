@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { z } from "zod"
 import {
   BrandBriefInput,
   BrandConcept,
@@ -9,6 +10,11 @@ import {
   BrandAppliedExamples,
   GenerationSection,
   brandBriefSchema,
+  brandStrategySchema,
+  brandNamingSchema,
+  brandVisualSchema,
+  brandPromptsSchema,
+  brandAppliedExamplesSchema,
   EngineConfig,
   defaultEngineConfig,
 } from "@/lib/brand-concept-types"
@@ -20,6 +26,34 @@ import {
   getPromptsPrompt,
   getAppliedExamplesPrompt,
 } from "@/lib/ai-prompts"
+
+// ============================================================================
+// Security: API Key Redaction for Logging
+// ============================================================================
+
+/**
+ * Redacts potential API keys from error messages to prevent accidental exposure.
+ * Patterns: sk-xxx, sk-ant-xxx, AIza-xxx, and other common API key formats.
+ */
+function redactApiKeys(message: string): string {
+  return message
+    // OpenAI keys (sk-...)
+    .replace(/sk-[a-zA-Z0-9]{32,}/g, "sk-[REDACTED]")
+    // Anthropic keys (sk-ant-...)
+    .replace(/sk-ant-[a-zA-Z0-9-]{32,}/g, "sk-ant-[REDACTED]")
+    // Google API keys (AIza...)
+    .replace(/AIza[a-zA-Z0-9_-]{35,}/g, "AIza[REDACTED]")
+    // Generic long alphanumeric strings that might be keys
+    .replace(/(?:key|token|secret|password)[=:]["']?[a-zA-Z0-9_-]{20,}["']?/gi, "[CREDENTIAL_REDACTED]")
+}
+
+/**
+ * Safely stringify an error for logging, redacting any API keys.
+ */
+function safeErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  return redactApiKeys(message)
+}
 
 // ============================================================================
 // API Client Types
@@ -173,12 +207,14 @@ async function callGeminiImage(
     generationConfig.imageSize = imageSize
   }
 
+  // Use header-based auth instead of URL query parameter to prevent key exposure in logs
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
       },
       body: JSON.stringify({
         contents: [
@@ -452,6 +488,47 @@ async function generateImage(
 }
 
 // ============================================================================
+// Safe JSON Parsing with Zod Validation
+// ============================================================================
+
+/**
+ * Safely parse JSON from AI response and validate against schema.
+ * Prevents malformed or malicious AI responses from bypassing type checks.
+ */
+function safeParseAIResponse<T>(
+  response: string,
+  schema: z.ZodType<T>,
+  sectionName: string
+): T {
+  // Extract JSON from response (AI may include additional text)
+  const jsonMatch = response.match(/\{[\s\S]*\}/)
+  if (!jsonMatch) {
+    throw new Error(`Failed to extract JSON from ${sectionName} response`)
+  }
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(jsonMatch[0])
+  } catch {
+    throw new Error(`Failed to parse ${sectionName} response as JSON`)
+  }
+
+  // Validate against schema
+  const result = schema.safeParse(parsed)
+  if (!result.success) {
+    console.error(
+      `[AI Response Validation] ${sectionName} validation failed:`,
+      result.error.flatten()
+    )
+    throw new Error(
+      `Invalid ${sectionName} response structure: ${result.error.issues.map((e: z.ZodIssue) => e.message).join(", ")}`
+    )
+  }
+
+  return result.data
+}
+
+// ============================================================================
 // Section Generation Functions
 // ============================================================================
 
@@ -467,12 +544,7 @@ async function generateStrategy(
     engineConfig
   )
 
-  // Extract JSON from response (Claude may include additional text)
-  const jsonMatch = response.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) {
-    throw new Error("Failed to parse strategy response")
-  }
-  return JSON.parse(jsonMatch[0]) as BrandStrategy
+  return safeParseAIResponse(response, brandStrategySchema, "strategy")
 }
 
 async function generateNaming(
@@ -487,11 +559,7 @@ async function generateNaming(
     engineConfig
   )
 
-  const jsonMatch = response.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) {
-    throw new Error("Failed to parse naming response")
-  }
-  return JSON.parse(jsonMatch[0]) as BrandNaming
+  return safeParseAIResponse(response, brandNamingSchema, "naming")
 }
 
 async function generateVisual(
@@ -507,11 +575,7 @@ async function generateVisual(
     engineConfig
   )
 
-  const jsonMatch = response.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) {
-    throw new Error("Failed to parse visual response")
-  }
-  return JSON.parse(jsonMatch[0]) as BrandVisual
+  return safeParseAIResponse(response, brandVisualSchema, "visual")
 }
 
 async function generatePrompts(
@@ -536,11 +600,7 @@ async function generatePrompts(
     engineConfig
   )
 
-  const jsonMatch = response.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) {
-    throw new Error("Failed to parse prompts response")
-  }
-  return JSON.parse(jsonMatch[0]) as BrandPrompts
+  return safeParseAIResponse(response, brandPromptsSchema, "prompts")
 }
 
 async function generateAppliedExamples(
@@ -575,11 +635,7 @@ async function generateAppliedExamples(
     engineConfig
   )
 
-  const jsonMatch = response.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) {
-    throw new Error("Failed to parse applied examples response")
-  }
-  return JSON.parse(jsonMatch[0]) as BrandAppliedExamples
+  return safeParseAIResponse(response, brandAppliedExamplesSchema, "applied examples")
 }
 
 // ============================================================================
@@ -630,7 +686,7 @@ export async function POST(request: NextRequest) {
       try {
         concept.strategy = await generateStrategy(brief, engineConfig)
       } catch (error) {
-        console.error("Strategy generation failed:", error)
+        console.error("Strategy generation failed:", safeErrorMessage(error))
         throw error // Re-throw to show user-friendly error
       }
     }
@@ -641,7 +697,7 @@ export async function POST(request: NextRequest) {
         concept.naming = await generateNaming(brief, engineConfig)
         brandName = concept.naming.primaryName || brandName
       } catch (error) {
-        console.error("Naming generation failed:", error)
+        console.error("Naming generation failed:", safeErrorMessage(error))
         throw error
       }
     }
@@ -651,7 +707,7 @@ export async function POST(request: NextRequest) {
       try {
         concept.visual = await generateVisual(brief, brandName, engineConfig)
       } catch (error) {
-        console.error("Visual generation failed:", error)
+        console.error("Visual generation failed:", safeErrorMessage(error))
         throw error
       }
     }
@@ -666,7 +722,7 @@ export async function POST(request: NextRequest) {
           engineConfig
         )
       } catch (error) {
-        console.error("Prompts generation failed:", error)
+        console.error("Prompts generation failed:", safeErrorMessage(error))
         throw error
       }
     }
@@ -685,7 +741,7 @@ export async function POST(request: NextRequest) {
           engineConfig
         )
       } catch (error) {
-        console.error("Applied examples generation failed:", error)
+        console.error("Applied examples generation failed:", safeErrorMessage(error))
         throw error
       }
     }
@@ -698,13 +754,13 @@ export async function POST(request: NextRequest) {
       concept,
     })
   } catch (error) {
-    console.error("Brand concept generation error:", error)
+    console.error("Brand concept generation error:", safeErrorMessage(error))
     return NextResponse.json(
       {
         success: false,
         error:
           error instanceof Error
-            ? error.message
+            ? redactApiKeys(error.message)
             : "An unexpected error occurred",
       },
       { status: 500 }
@@ -764,13 +820,13 @@ export async function PATCH(request: NextRequest) {
       regeneratedSection: section,
     })
   } catch (error) {
-    console.error("Section regeneration error:", error)
+    console.error("Section regeneration error:", safeErrorMessage(error))
     return NextResponse.json(
       {
         success: false,
         error:
           error instanceof Error
-            ? error.message
+            ? redactApiKeys(error.message)
             : "Regeneration failed",
       },
       { status: 500 }

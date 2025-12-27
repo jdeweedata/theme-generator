@@ -104,9 +104,90 @@ export const defaultBrandBrief: BrandBriefInput = {
 }
 
 // ============================================================================
-// Brand Concept Output Types
+// Brand Concept Output Types (with Zod validation schemas)
 // ============================================================================
 
+// Zod schemas for validating AI responses
+export const brandStrategySchema = z.object({
+  purpose: z.string(),
+  promise: z.string(),
+  positioning: z.string(),
+  differentiation: z.array(z.string()),
+  messagingPillars: z.array(
+    z.object({
+      pillar: z.string(),
+      proofPoints: z.array(z.string()),
+    })
+  ),
+})
+
+export const brandNamingSchema = z.object({
+  primaryName: z.string(),
+  nameRationale: z.string(),
+  alternatives: z.array(
+    z.object({
+      name: z.string(),
+      rationale: z.string(),
+    })
+  ),
+  taglineOptions: z.array(z.string()),
+  toneOfVoice: z.object({
+    description: z.string(),
+    dos: z.array(z.string()),
+    donts: z.array(z.string()),
+    examplePhrases: z.array(z.string()),
+  }),
+})
+
+export const brandVisualSchema = z.object({
+  colorPalette: z.object({
+    primary: z.object({ hex: z.string(), usage: z.string() }),
+    secondary: z.object({ hex: z.string(), usage: z.string() }),
+    accent: z.object({ hex: z.string(), usage: z.string() }),
+    neutralLight: z.object({ hex: z.string(), usage: z.string() }),
+    neutralDark: z.object({ hex: z.string(), usage: z.string() }),
+    reasoning: z.string(),
+  }),
+  typography: z.object({
+    headingFont: z.string(),
+    bodyFont: z.string(),
+    monoFont: z.string().optional(),
+    reasoning: z.string(),
+  }),
+  logoDirections: z.array(
+    z.object({
+      concept: z.string(),
+      promptText: z.string(),
+    })
+  ),
+  iconographyStyle: z.string(),
+  illustrationStyle: z.string(),
+})
+
+export const brandPromptsSchema = z.object({
+  logoPrompt: z.string(),
+  iconPrompt: z.string(),
+  heroImagePrompt: z.string(),
+  socialMediaPrompts: z.array(z.string()),
+  photographyStyle: z.string(),
+})
+
+export const brandAppliedExamplesSchema = z.object({
+  homepageHero: z.object({
+    headline: z.string(),
+    subheadline: z.string(),
+    ctaText: z.string(),
+  }),
+  socialPosts: z.array(
+    z.object({
+      platform: z.string(),
+      content: z.string(),
+    })
+  ),
+  emailSignature: z.string(),
+})
+
+// TypeScript interfaces (derived from schemas)
 export interface BrandStrategy {
   purpose: string
   promise: string
